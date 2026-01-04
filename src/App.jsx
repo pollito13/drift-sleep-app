@@ -1,10 +1,29 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Moon, Wind, PenLine, Volume2, VolumeX, ChevronLeft, Plus, Trash2, Cloud, Sparkles, BookOpen, X, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Moon, Wind, PenLine, Volume2, VolumeX, ChevronLeft, Plus, Trash2, Cloud, Sparkles, BookOpen, ChevronRight, Settings, X } from 'lucide-react';
 
 // --- Gemini API Helper ---
 const callGemini = async (prompt) => {
   try {
-    const apiKey = ""; // Runtime provided
+    let apiKey = "";
+
+    // 1. Try Vercel Environment Variable (Secure for Live App)
+    // We use optional chaining (?.) to prevent crashes in Preview if env is missing
+    try {
+      apiKey = import.meta.env?.VITE_GEMINI_API_KEY;
+    } catch (e) {
+      // Ignore env errors in preview
+    }
+
+    // 2. If no Env Var found, look for User's Local Storage Key (Settings Menu)
+    if (!apiKey) {
+       apiKey = localStorage.getItem('drift_api_key');
+    }
+
+    if (!apiKey) {
+      console.warn("Missing API Key");
+      return "Please add your API Key in Settings to use this feature.";
+    }
+
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
       {
@@ -29,8 +48,8 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('breathe');
   const [isMuted, setIsMuted] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
-  // Check for first time user
   useEffect(() => {
     const hasSeenOnboarding = localStorage.getItem('drift_onboarding_seen');
     if (!hasSeenOnboarding) {
@@ -43,7 +62,6 @@ const App = () => {
     setShowOnboarding(false);
   };
 
-  // Shared Audio Context State
   const audioContextRef = useRef(null);
   const gainNodeRef = useRef(null);
   const noiseNodeRef = useRef(null);
@@ -60,10 +78,8 @@ const App = () => {
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     
-    // Generate Pink Noise (Paul Kellet's method)
-    // 1/f noise - balanced and natural like rainfall
+    // Pink Noise Generator
     let b0=0, b1=0, b2=0, b3=0, b4=0, b5=0, b6=0;
-    
     for (let i = 0; i < bufferSize; i++) {
       const white = Math.random() * 2 - 1;
       b0 = 0.99886 * b0 + white * 0.0555179;
@@ -73,7 +89,7 @@ const App = () => {
       b4 = 0.55000 * b4 + white * 0.5329522;
       b5 = -0.7616 * b5 - white * 0.0168980;
       data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-      data[i] *= 0.11; // Normalize to roughly -1 to 1
+      data[i] *= 0.11; 
       b6 = white * 0.115926;
     }
 
@@ -81,7 +97,6 @@ const App = () => {
     noise.buffer = buffer;
     noise.loop = true;
     
-    // Slight lowpass to remove very harsh highs if any remain
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.value = 5000; 
@@ -123,8 +138,8 @@ const App = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300 font-sans flex flex-col items-center justify-between overflow-hidden selection:bg-indigo-900 selection:text-white relative">
       
-      {/* Onboarding Overlay */}
       {showOnboarding && <Onboarding onClose={closeOnboarding} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
       {/* Header */}
       <div className="w-full max-w-md p-6 flex justify-between items-center z-10">
@@ -132,16 +147,24 @@ const App = () => {
           <Moon className="w-5 h-5 text-indigo-400" />
           <span className="text-lg font-medium tracking-wide text-indigo-100">Drift</span>
         </div>
-        <button 
-          onClick={toggleNoise}
-          className={`p-3 rounded-full transition-all duration-500 ${!isMuted ? 'bg-indigo-900/30 text-indigo-400' : 'bg-slate-900 text-slate-600'}`}
-          aria-label="Toggle Pink Noise"
-        >
-          {!isMuted ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+           <button 
+            onClick={() => setShowSettings(true)}
+            className="p-3 rounded-full bg-slate-900 text-slate-600 hover:text-indigo-400 hover:bg-indigo-900/30 transition-all"
+            aria-label="Settings"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={toggleNoise}
+            className={`p-3 rounded-full transition-all duration-500 ${!isMuted ? 'bg-indigo-900/30 text-indigo-400' : 'bg-slate-900 text-slate-600'}`}
+          >
+            {!isMuted ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content */}
       <div className="flex-1 w-full max-w-md flex flex-col justify-center items-center relative p-6 overflow-hidden">
         {activeTab === 'breathe' && <BreathingExercise />}
         {activeTab === 'sheep' && <SheepCounter />}
@@ -204,17 +227,17 @@ const Onboarding = ({ onClose }) => {
     },
     {
       title: "Pink Noise",
-      desc: "Tap the speaker icon in the top right to play soothing Pink Noise. It masks silence and calms the brain.",
+      desc: "Tap the speaker icon in the top right to play soothing Pink Noise.",
       icon: <Volume2 className="w-12 h-12 text-indigo-400" />
     },
     {
-      title: "Breathe & Count",
-      desc: "Use the 4-7-8 breathing guide or the sheep counter to lower your heart rate.",
-      icon: <Wind className="w-12 h-12 text-indigo-400" />
+      title: "Count Sheep",
+      desc: "Tap to count our hand-drawn flock. It's surprisingly boring (in a good way).",
+      icon: <Cloud className="w-12 h-12 text-indigo-400" />
     },
     {
       title: "Clear Your Mind",
-      desc: "Use the Journal to dump your thoughts, or ask our AI to tell you a boring bedtime story.",
+      desc: "Use the Journal to dump your thoughts or get AI sleep advice.",
       icon: <Sparkles className="w-12 h-12 text-indigo-400" />
     }
   ];
@@ -263,6 +286,58 @@ const Onboarding = ({ onClose }) => {
     </div>
   );
 };
+
+// --- Custom Sheep SVGs ---
+
+const SheepCloud = () => (
+  <svg viewBox="0 0 100 80" className="w-32 h-32 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+    {/* Legs */}
+    <path d="M35 65 L35 75 M75 65 L75 75" stroke="#334155" strokeWidth="4" strokeLinecap="round" />
+    {/* Wool - Fluffy Cloud */}
+    <path d="M25 50 Q20 35 35 30 Q50 20 65 30 Q80 35 75 50 Q85 60 75 70 Q60 75 40 70 Q25 65 25 50" fill="#e2e8f0" />
+    {/* Head - Rounded */}
+    <circle cx="25" cy="50" r="14" fill="#1e293b" />
+    {/* Ear - Floppy Side Ear (Fixed the 'beak' look) */}
+    <ellipse cx="12" cy="50" rx="4" ry="8" fill="#1e293b" transform="rotate(-10 12 50)" />
+    {/* Eye */}
+    <circle cx="22" cy="47" r="1.5" fill="white" opacity="0.9" />
+  </svg>
+);
+
+const SheepDark = () => (
+  <svg viewBox="0 0 100 80" className="w-32 h-32 drop-shadow-xl">
+    {/* Legs */}
+    <path d="M40 65 L40 78 M70 65 L70 78" stroke="#1e293b" strokeWidth="4" strokeLinecap="round" />
+    {/* Wool - Round and Dark */}
+    <circle cx="55" cy="45" r="28" fill="#334155" />
+    <circle cx="35" cy="45" r="20" fill="#334155" />
+    <circle cx="75" cy="45" r="18" fill="#334155" />
+    <circle cx="55" cy="30" r="18" fill="#334155" />
+    {/* Head */}
+    <circle cx="28" cy="48" r="13" fill="#0f172a" />
+    {/* Ear */}
+    <ellipse cx="16" cy="50" rx="3" ry="7" fill="#0f172a" transform="rotate(15 16 50)" />
+    {/* Eye - Sleeping (U shape) */}
+    <path d="M23 46 Q28 50 33 46" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" fill="none" /> 
+  </svg>
+);
+
+const SheepChubby = () => (
+  <svg viewBox="0 0 100 80" className="w-32 h-32 drop-shadow-xl">
+     {/* Legs - Tiny and stubby */}
+     <path d="M40 70 L40 78 M70 70 L70 78" stroke="#94a3b8" strokeWidth="5" strokeLinecap="round" />
+     {/* Wool - One Big Fluff */}
+     <ellipse cx="55" cy="50" rx="35" ry="25" fill="#f8fafc" />
+     {/* Head - Tucked in */}
+     <circle cx="30" cy="50" r="15" fill="#1e293b" />
+     {/* Ear - Droopy */}
+     <path d="M18 50 Q15 55 18 60" stroke="#1e293b" strokeWidth="4" strokeLinecap="round" fill="none" />
+     {/* Face */}
+     <circle cx="26" cy="47" r="1.5" fill="white" />
+     {/* Smile */}
+     <path d="M28 55 Q30 57 32 55" stroke="#475569" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+  </svg>
+);
 
 // --- Components ---
 
@@ -380,11 +455,28 @@ const BreathingExercise = () => {
 const SheepCounter = () => {
   const [count, setCount] = useState(0);
   const [animating, setAnimating] = useState(false);
+  const [sheepType, setSheepType] = useState(0); // 0: Cloud, 1: Dark, 2: Chubby
 
   const increment = () => {
+    // Pick a new random sheep that is different from the current one to ensure variety
+    let nextType = Math.floor(Math.random() * 3);
+    while (nextType === sheepType) {
+        nextType = Math.floor(Math.random() * 3);
+    }
+    
+    setSheepType(nextType);
     setCount(c => c + 1);
     setAnimating(true);
     setTimeout(() => setAnimating(false), 500);
+  };
+
+  const renderSheep = () => {
+    switch(sheepType) {
+        case 0: return <SheepCloud />;
+        case 1: return <SheepDark />;
+        case 2: return <SheepChubby />;
+        default: return <SheepCloud />;
+    }
   };
 
   return (
@@ -393,24 +485,24 @@ const SheepCounter = () => {
       className="w-full h-full flex flex-col items-center justify-center gap-8 animate-in fade-in duration-700 active:scale-[0.98] transition-transform"
     >
       <div className="relative h-48 w-full flex items-center justify-center">
-         <div className={`text-8xl transition-all duration-500 ${animating ? '-translate-y-12 rotate-6 opacity-100' : 'translate-y-0 opacity-80'}`}>
-            🐑
+         {/* Jump Animation */}
+         <div className={`transition-all duration-500 ${animating ? '-translate-y-16 -rotate-6 scale-110 opacity-100' : 'translate-y-0 opacity-80'}`}>
+            {renderSheep()}
          </div>
-         <div className="absolute bottom-0 w-32 h-2 bg-indigo-900/30 rounded-full blur-md"></div>
+         <div className="absolute bottom-0 w-32 h-4 bg-indigo-950/50 rounded-[100%] blur-md scale-x-110"></div>
       </div>
 
       <div className="text-center">
         <div className="text-6xl font-thin text-indigo-100 tabular-nums">
           {count}
         </div>
-        {/* Changed text color to be more visible (same as instructions) */}
         <div className="text-indigo-200 text-sm mt-2 uppercase tracking-widest">
           Sheep Counted
         </div>
       </div>
       
       <div className="text-slate-600 text-xs mt-8">
-        Tap anywhere to count
+        Tap to count the flock
       </div>
     </button>
   );
@@ -419,13 +511,9 @@ const SheepCounter = () => {
 const BrainDump = () => {
   const [view, setView] = useState('list');
   const [entries, setEntries] = useState([]);
-  
-  // Editor State
   const [currentId, setCurrentId] = useState(null);
   const [currentTitle, setCurrentTitle] = useState('');
   const [currentBody, setCurrentBody] = useState('');
-
-  // AI State
   const [aiAdvice, setAiAdvice] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -456,7 +544,7 @@ const BrainDump = () => {
         title: currentTitle || 'Untitled Thought',
         body: currentBody,
         updatedAt: timestamp,
-        aiAdvice: aiAdvice // Save the advice too
+        aiAdvice: aiAdvice
     };
 
     if (currentId) {
@@ -612,7 +700,6 @@ const BrainDump = () => {
         spellCheck="false"
       />
       
-      {/* AI Advice Box */}
       {aiAdvice && (
         <div className="bg-indigo-950/30 border border-indigo-500/20 p-4 rounded-xl animate-in slide-in-from-bottom-2 fade-in">
            <div className="flex items-center gap-2 mb-2 text-indigo-300">
@@ -662,7 +749,7 @@ const StoryGenerator = () => {
 
   const generateStory = async () => {
     setIsGenerating(true);
-    setStory(''); // Clear previous
+    setStory('');
     const prompt = `Write a very slow, boring, and extremely calming bedtime story set in a "${theme}". Focus purely on sensory details like soft sounds, dim lights, colors, and stillness. Avoid any plot, conflict, or characters. Just describe the peaceful environment to help someone fall asleep. Keep it under 150 words.`;
     const response = await callGemini(prompt);
     setStory(response);
@@ -739,5 +826,66 @@ const Tip = ({ title, desc }) => (
     <p className="text-slate-400 text-sm leading-relaxed">{desc}</p>
   </div>
 );
+
+const SettingsModal = ({ onClose }) => {
+  const [key, setKey] = useState('');
+
+  useEffect(() => {
+    const savedKey = localStorage.getItem('drift_api_key');
+    if (savedKey) setKey(savedKey);
+  }, []);
+
+  const handleSave = () => {
+    localStorage.setItem('drift_api_key', key);
+    onClose();
+  };
+
+  const handleClear = () => {
+    localStorage.removeItem('drift_api_key');
+    setKey('');
+  };
+
+  return (
+    <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-300">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-light text-indigo-100">Settings</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="mb-6">
+          <label className="block text-xs uppercase tracking-widest text-slate-500 mb-2">Gemini API Key</label>
+          <input 
+            type="password" 
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder="Paste key here..."
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-slate-300 focus:border-indigo-500 focus:outline-none"
+          />
+          <p className="text-[10px] text-slate-600 mt-2 leading-relaxed">
+            Required for Dream stories and Journal soothing. Saved locally on your device.
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <button 
+            onClick={handleClear}
+            className="flex-1 py-2 text-slate-500 hover:text-red-400 text-sm transition-colors border border-transparent hover:border-slate-800 rounded-lg"
+          >
+            Clear
+          </button>
+          <button 
+            onClick={handleSave}
+            className="flex-[2] bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+          >
+            Save Key
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default App;
