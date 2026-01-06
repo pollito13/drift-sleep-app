@@ -1,22 +1,19 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Moon, Wind, PenLine, Volume2, VolumeX, ChevronLeft, Plus, Trash2, Cloud, Sparkles, BookOpen, ChevronRight, Settings, X } from 'lucide-react';
 
 // --- Gemini API Helper ---
 const callGemini = async (prompt) => {
   try {
-    let apiKey = "";
+    // 1. Check Local Storage (User Settings)
+    let apiKey = localStorage.getItem('drift_api_key');
 
-    // 1. Try Vercel Environment Variable (Secure for Live App)
-    // We use optional chaining (?.) to prevent crashes in Preview if env is missing
-    try {
-      apiKey = import.meta.env?.VITE_GEMINI_API_KEY;
-    } catch (e) {
-      // Ignore env errors in preview
-    }
-
-    // 2. If no Env Var found, look for User's Local Storage Key (Settings Menu)
+    // 2. If not found, check Vercel Environment Variable (Secure for Live App)
     if (!apiKey) {
-       apiKey = localStorage.getItem('drift_api_key');
+      try {
+        apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      } catch (e) {
+        // Env variable not available or not supported in this context
+      }
     }
 
     if (!apiKey) {
@@ -252,34 +249,50 @@ const Onboarding = ({ onClose }) => {
 
   return (
     <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-500">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center">
-        <div className="mb-6 p-4 bg-indigo-900/20 rounded-full">
+      
+      {/* Z-Layer 1: Context Anchors */}
+      <div className="absolute top-6 left-6 flex items-center gap-2 animate-in slide-in-from-top-4 duration-700">
+        <Moon className="w-6 h-6 text-indigo-400" />
+        <span className="text-xl font-medium tracking-wide text-indigo-100">Drift</span>
+      </div>
+
+      {/* Z-Layer 2: The Focus Card */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center relative overflow-hidden">
+        
+        {/* Step Content */}
+        <div className="mb-6 p-6 bg-indigo-900/20 rounded-full ring-1 ring-indigo-500/20">
           {steps[step].icon}
         </div>
-        <h2 className="text-2xl font-light text-indigo-100 mb-2">{steps[step].title}</h2>
-        <p className="text-slate-400 leading-relaxed mb-8 h-20">
+        
+        <h2 className="text-2xl font-light text-indigo-100 mb-3">{steps[step].title}</h2>
+        <p className="text-slate-400 leading-relaxed mb-8 min-h-[5rem]">
           {steps[step].desc}
         </p>
         
-        <div className="flex gap-2 w-full">
+        {/* Primary Action Row */}
+        <div className="w-full flex gap-3">
           <button 
             onClick={onClose}
-            className="flex-1 py-3 text-slate-500 hover:text-slate-300 transition-colors text-sm"
+            className="flex-1 py-3.5 text-slate-500 hover:text-slate-300 transition-colors text-sm font-medium rounded-xl hover:bg-slate-800/50"
           >
             Skip
           </button>
           <button 
             onClick={handleNext}
-            className="flex-[2] bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3 font-medium transition-all active:scale-95 flex items-center justify-center gap-2"
+            className="flex-[2] bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl py-3.5 font-medium transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20"
           >
             {step === steps.length - 1 ? "Get Started" : "Next"}
             {step !== steps.length - 1 && <ChevronRight className="w-4 h-4" />}
           </button>
         </div>
 
-        <div className="flex gap-1 mt-6">
+        {/* Progress Indicators */}
+        <div className="flex gap-2 mt-8">
           {steps.map((_, i) => (
-            <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === step ? 'w-6 bg-indigo-500' : 'w-1.5 bg-slate-800'}`} />
+            <div 
+              key={i} 
+              className={`h-1.5 rounded-full transition-all duration-500 ${i === step ? 'w-8 bg-indigo-500' : 'w-2 bg-slate-800'}`} 
+            />
           ))}
         </div>
       </div>
